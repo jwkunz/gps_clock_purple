@@ -10,8 +10,10 @@ use panic_halt as _;
 use arduino_hal::prelude::*;
 
 mod max7221;
-
 use max7221::Max7221;
+
+mod time_clock;
+use time_clock::TimeClock;
 
 #[arduino_hal::entry]
 fn main() -> ! {
@@ -43,23 +45,18 @@ display.init();
 
     let mut last_pps = false;
     let mut counter: u32 = 0;
-    let mut text: String<8> = String::new();
+    let mut text: String<16> = String::new();
+    let mut clock = TimeClock::new(12, 0, 0, true);
 
     loop {
         let current_pps = pps.is_high();
 
         // Rising edge?
         if current_pps && !last_pps {
-            led.toggle();
-
             text.clear();
-            write!(&mut text, "{}", counter).unwrap();
-
-            ufmt::uwriteln!(&mut serial, "Elapsed Seconds: {}", counter).unwrap();
-
-            display.write_str(&text);
-
-            counter += 1;
+            display.write_str(clock.format(&mut text));
+            ufmt::uwriteln!(&mut serial, "{}", clock.format(&mut text)).unwrap();
+            clock.tick_second();
         }
 
         last_pps = current_pps;
