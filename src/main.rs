@@ -9,11 +9,14 @@ use panic_halt as _;
 
 use arduino_hal::prelude::*;
 
+
 mod max7221;
 use max7221::Max7221;
 
 mod time_clock;
 use time_clock::TimeClock;
+
+mod time_input;
 
 #[arduino_hal::entry]
 fn main() -> ! {
@@ -41,15 +44,56 @@ display.init();
 
     let pps = pins.d7.into_floating_input();
 
-    ufmt::uwriteln!(&mut serial, "GPS clock starting!\r");
-
     let mut last_pps = false;
     let mut counter: u32 = 0;
     let mut text: String<16> = String::new();
-    let mut clock = TimeClock::new(0, 0, 0);
+
+
+    let mut clock = TimeClock::new(
+        0,
+        0,
+        0
+    );
     let mut delay = arduino_hal::Delay::new();
     
 
+    let mut input: String<8> = String::new();
+
+    loop {
+        input.clear();
+
+        ufmt::uwriteln!(
+            &mut serial,
+            "Enter 24 hour time HH:MM:SS:"
+        ).unwrap();
+
+        loop {
+            let c = nb::block!(serial.read()).unwrap();
+
+            match c {
+                b'\r' | b'\n' => break,
+
+                _ => {
+                    if input.len() < 8 {
+                        input.push(c as char).ok();
+                    }
+                }
+            }
+        }
+
+        if let Some((h, m, s)) = time_input::parse_time(input.as_str()) {
+            clock.set_time(h, m, s, 0);
+            break;
+        }
+
+        ufmt::uwriteln!(
+            &mut serial,
+            "Invalid. Try again."
+        ).unwrap();
+    }
+
+
+    ufmt::uwriteln!(&mut serial, "GPS clock starting!\r");
     loop {
         let current_pps = pps.is_high();
 

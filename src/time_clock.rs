@@ -21,6 +21,19 @@ impl TimeClock {
         }
     }
 
+    pub fn set_time(
+        &mut self,
+        hours: u8,
+        minutes: u8,
+        seconds: u8,
+        milliseconds: u16
+    ) {
+        self.hours = hours;
+        self.minutes = minutes;
+        self.seconds = seconds;
+        self.milliseconds = milliseconds;
+    }
+
     pub fn tick_fwd(
         &mut self,
         milliseconds: u16,

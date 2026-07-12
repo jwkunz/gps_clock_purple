@@ -199,7 +199,7 @@ where
 
         self.set_brightness(1);
 
-        self.write_str("GOCOUGS!");
+        self.write_str("8.8.8.8.8.8.8.8.");
 
         self.display_test(false);
 
