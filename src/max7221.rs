@@ -199,63 +199,40 @@ where
 
         self.set_brightness(1);
 
-        self.write_string("GOCOUGS!");
+        self.write_str("GOCOUGS!");
 
         self.display_test(false);
 
         self.power_switch(true);
     }
 
+    fn write_digit(&mut self, digit: u8, code: u8) {
+        self.send_data(Self::form_code(digit + 1, code));
+    }
 
 
-    pub fn write_string(&mut self, text:&str) {
-
-        let mut digit:u8 = 0;
-
-
+    pub fn write_str(&mut self, text: &str) {
         let bytes = text.as_bytes();
 
-
+        let mut digit = 0;
         let mut i = 0;
 
+        while i < bytes.len() && digit < MX_NUM_SEGMENTS {
+            let mut code = decode_char(bytes[i] as char);
 
-        while i < bytes.len() && digit < 8 {
-
-            let mut code =
-                decode_char(bytes[i] as char);
-
-
-            // decimal point handling
-            if i+1 < bytes.len()
-                && bytes[i+1] == b'.'
-            {
-                code |= MX_MASK_DP as u8;
+            if i + 1 < bytes.len() && bytes[i + 1] == b'.' {
+                code |= 0x80;
                 i += 1;
             }
 
-
-            self.send_data(
-                Self::form_code(
-                    digit+1,
-                    code
-                )
-            );
-
+            self.write_digit(digit, code);
 
             digit += 1;
             i += 1;
         }
 
-
-        while digit < 8 {
-
-            self.send_data(
-                Self::form_code(
-                    digit+1,
-                    0
-                )
-            );
-
+        while digit < MX_NUM_SEGMENTS {
+            self.write_digit(digit, decode_char(' '));
             digit += 1;
         }
     }
@@ -263,7 +240,7 @@ where
 
 
     pub fn blank(&mut self) {
-        self.write_string("        ");
+        self.write_str("        ");
     }
 }
 

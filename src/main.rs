@@ -1,6 +1,10 @@
 #![no_std]
 #![no_main]
 
+use heapless::String;
+use core::fmt::Write;
+use ufmt::uwrite;
+
 use panic_halt as _;
 
 use arduino_hal::prelude::*;
@@ -33,14 +37,31 @@ display.init();
 
     let mut led = pins.d13.into_output();
 
+    let pps = pins.d7.into_floating_input();
+
     ufmt::uwriteln!(&mut serial, "GPS clock starting!\r");
-    display.write_string("12.34");
+
+    let mut last_pps = false;
+    let mut counter: u32 = 0;
+    let mut text: String<8> = String::new();
 
     loop {
-        led.toggle();
+        let current_pps = pps.is_high();
 
-        ufmt::uwriteln!(&mut serial, "Still alive...\r");
+        // Rising edge?
+        if current_pps && !last_pps {
+            led.toggle();
 
-        arduino_hal::delay_ms(1000);
+            text.clear();
+            write!(&mut text, "{}", counter).unwrap();
+
+            ufmt::uwriteln!(&mut serial, "Elapsed Seconds: {}", counter).unwrap();
+
+            display.write_str(&text);
+
+            counter += 1;
+        }
+
+        last_pps = current_pps;
     }
 }
