@@ -5,7 +5,6 @@ pub struct TimeClock {
     seconds: u8,
     minutes: u8,
     hours: u8,
-    twelve_hour: bool,
 }
 
 impl TimeClock {
@@ -13,14 +12,12 @@ impl TimeClock {
         hours: u8,
         minutes: u8,
         seconds: u8,
-        twelve_hour: bool,
     ) -> Self {
         Self {
             milliseconds: 0,
             seconds,
             minutes,
             hours,
-            twelve_hour,
         }
     }
 
@@ -74,6 +71,15 @@ impl TimeClock {
                 }
             }
         }
+    }
+
+    pub fn increment_millis_no_tick(&mut self, millis: u16){
+        self.milliseconds += millis;
+    }
+
+    pub fn tick_pps(&mut self) {
+        self.milliseconds = 0;
+        self.tick_second();
     }
 
     pub fn format<'a>(

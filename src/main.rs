@@ -46,7 +46,9 @@ display.init();
     let mut last_pps = false;
     let mut counter: u32 = 0;
     let mut text: String<16> = String::new();
-    let mut clock = TimeClock::new(12, 0, 0, true);
+    let mut clock = TimeClock::new(0, 0, 0);
+    let mut delay = arduino_hal::Delay::new();
+    
 
     loop {
         let current_pps = pps.is_high();
@@ -54,10 +56,13 @@ display.init();
         // Rising edge?
         if current_pps && !last_pps {
             text.clear();
-            display.write_str(clock.format(&mut text));
             ufmt::uwriteln!(&mut serial, "{}", clock.format(&mut text)).unwrap();
-            clock.tick_second();
+            clock.tick_pps();
         }
+
+        clock.increment_millis_no_tick(10);
+        delay.delay_us(9150u16);
+        display.write_str(clock.format(&mut text));
 
         last_pps = current_pps;
     }
