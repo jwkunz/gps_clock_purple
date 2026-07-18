@@ -24,9 +24,6 @@ mod time_zone;
 static PPS_PENDING: avr_device::interrupt::Mutex<Cell<bool>> =
     avr_device::interrupt::Mutex::new(Cell::new(false));
 
-const TIMER_TICKS_PER_CENTISECOND: u16 = 625;
-const DISPLAY_QUIET_AFTER_CENTISECONDS: u8 = 98;
-
 pub(crate) fn pps_pending() -> bool {
     avr_device::interrupt::free(|cs| PPS_PENDING.borrow(cs).get())
 }
@@ -35,32 +32,12 @@ fn take_pps() -> bool {
     avr_device::interrupt::free(|cs| PPS_PENDING.borrow(cs).replace(false))
 }
 
-/// Timer1 ticks every 16 µs at the selected /256 prescaler.  It is reset by
-/// PPS, so 625 ticks represent one centisecond.
-fn centiseconds_since_pps() -> Option<u8> {
-    avr_device::interrupt::free(|_| {
-        let timer1 = unsafe { arduino_hal::pac::TC1::steal() };
-
-        // A missing PPS lets the 16-bit timer overflow after about 1.049 s.
-        // Do not present a wrapped counter as a synchronized fraction.
-        if timer1.tifr1().read().tov1().bit_is_set() {
-            return None;
-        }
-
-        Some((timer1.tcnt1().read().bits() / TIMER_TICKS_PER_CENTISECOND) as u8)
-    })
-}
-
 #[avr_device::interrupt(atmega328p)]
 fn PCINT2() {
     // Pin-change interrupts fire on both PPS edges.  D7 is PD7; only retain
     // the active-high edge.  Direct register access keeps the ISR tiny.
     let port_d = unsafe { arduino_hal::pac::PORTD::steal().pind().read().bits() };
     if port_d & (1 << 7) != 0 {
-        let timer1 = unsafe { arduino_hal::pac::TC1::steal() };
-        timer1.tcnt1().write(|w| w.set(0));
-        // AVR timer flags are cleared by writing a one to their bit.
-        timer1.tifr1().write(|w| w.tov1().set_bit());
         avr_device::interrupt::free(|cs| PPS_PENDING.borrow(cs).set(true));
     }
 }
@@ -84,28 +61,16 @@ fn main() -> ! {
     let mut text: String<16> = String::new();
     let mut clock = TimeClock::new(0, 0, 0);
     let mut primed_time: Option<(u8, u8, u8)> = None;
-    let mut last_tenths = u8::MAX;
-    let mut synchronized = false;
-
-    // Timer1 runs freely at 16 MHz / 256 = 62,500 Hz.  One second is 62,500
-    // counts, so it never overflows while valid PPS pulses are present.
-    dp.TC1.tccr1a().write(|w| unsafe { w.bits(0) });
-    dp.TC1.tccr1b().write(|w| w.cs1().prescale_256());
-    dp.TC1.tcnt1().write(|w| w.set(0));
-    dp.TC1.tifr1().write(|w| w.tov1().set_bit());
 
     // PCINT2 covers port D.  PCINT23 corresponds to PD7 / Arduino D7.
     dp.EXINT.pcicr().write(|w| unsafe { w.bits(0b100) });
     dp.EXINT.pcmsk2().write(|w| w.set(1 << 7));
     unsafe { avr_device::interrupt::enable() };
 
-    display.write_str(clock.format(&mut text, 0));
+    display.write_str(clock.format(&mut text));
 
     loop {
         if take_pps() {
-            synchronized = true;
-            last_tenths = u8::MAX;
-
             // NMEA follows this PPS by about one second.  Advance the parsed
             // UTC timestamp before staging it for the next PPS, so that edge
             // receives the time it actually represents.
@@ -120,26 +85,13 @@ fn main() -> ! {
             primed_time = gps_uart
                 .capture_rmc_time()
                 .map(|utc| time_zone::from_utc(utc.next_second()));
-        }
 
-        if !synchronized || pps_pending() {
-            continue;
-        }
-
-        let Some(centiseconds) = centiseconds_since_pps() else {
-            continue;
-        };
-
-        // Keep the last 20 ms silent so the next PPS and its synchronized UART
-        // start bit cannot be delayed by a MAX7221 transaction.
-        if centiseconds >= DISPLAY_QUIET_AFTER_CENTISECONDS {
-            continue;
-        }
-
-        let tenths = centiseconds / 10;
-        if tenths != last_tenths {
-            display.write_str(clock.format(&mut text, tenths));
-            last_tenths = tenths;
+            // A new PPS aborts an old capture.  Return to the top immediately
+            // in that case, so its synchronized sentence is not delayed by a
+            // display transaction.
+            if !pps_pending() {
+                display.write_str(clock.format(&mut text));
+            }
         }
     }
 }
