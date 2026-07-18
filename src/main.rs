@@ -84,7 +84,7 @@ fn main() -> ! {
     let mut text: String<16> = String::new();
     let mut clock = TimeClock::new(0, 0, 0);
     let mut primed_time: Option<(u8, u8, u8)> = None;
-    let mut last_centiseconds = u8::MAX;
+    let mut last_tenths = u8::MAX;
     let mut synchronized = false;
 
     // Timer1 runs freely at 16 MHz / 256 = 62,500 Hz.  One second is 62,500
@@ -104,7 +104,7 @@ fn main() -> ! {
     loop {
         if take_pps() {
             synchronized = true;
-            last_centiseconds = u8::MAX;
+            last_tenths = u8::MAX;
 
             // An RMC sentence received after this edge is intentionally
             // applied at the *next* edge.  This accepts the GPS module's
@@ -136,9 +136,10 @@ fn main() -> ! {
             continue;
         }
 
-        if centiseconds != last_centiseconds {
-            display.write_str(clock.format(&mut text, centiseconds));
-            last_centiseconds = centiseconds;
+        let tenths = centiseconds / 10;
+        if tenths != last_tenths {
+            display.write_str(clock.format(&mut text, tenths));
+            last_tenths = tenths;
         }
     }
 }
