@@ -87,7 +87,7 @@ fn main() -> ! {
         // immediately with PPS.  The ISR only records a possible next pulse.
         primed_time = gps_uart
             .capture_rmc_time()
-            .map(|(hours, minutes, seconds)| time_zone::from_utc(hours, minutes, seconds));
+            .map(time_zone::from_utc);
 
         // If capture ended because a new PPS arrived, return to the top of the
         // loop immediately.  A MAX7221 transaction here could otherwise make

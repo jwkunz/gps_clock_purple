@@ -22,7 +22,7 @@ where
 
     /// Capture NMEA sent after a PPS edge.  A subsequent PPS aborts the old
     /// capture so a delayed sentence can never be associated with a new edge.
-    pub fn capture_rmc_time(&mut self) -> Option<(u8, u8, u8)> {
+    pub fn capture_rmc_time(&mut self) -> Option<nmea::UtcDateTime> {
         let mut line = [0u8; LINE_CAPACITY];
         let mut line_len = 0;
         let mut remaining_us = RMC_CAPTURE_TIMEOUT_US;
