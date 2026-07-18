@@ -41,20 +41,22 @@ impl TimeClock {
         }
     }
 
-    pub fn format<'a>(&self, s: &'a mut String<16>) -> &'a str {
+    pub fn format<'a>(&self, s: &'a mut String<16>, centiseconds: u8) -> &'a str {
         s.clear();
 
         // Decimal points light the MAX7221's decimal-point segments, leaving
-        // six whole digits for HH:MM:SS and two unused display positions.
+        // eight digits for HH.MM.SS.CC.
         let _ = write!(
             s,
-            "{}{}.{}{}.{}{}",
+            "{}{}.{}{}.{}{}.{}{}",
             self.hours / 10,
             self.hours % 10,
             self.minutes / 10,
             self.minutes % 10,
             self.seconds / 10,
             self.seconds % 10,
+            centiseconds / 10,
+            centiseconds % 10,
         );
 
         s.as_str()
