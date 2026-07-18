@@ -17,6 +17,8 @@ use soft_uart::SoftUart;
 mod time_clock;
 use time_clock::TimeClock;
 
+mod time_zone;
+
 // Set only by the PPS ISR.  The main loop consumes it before starting an NMEA
 // capture; the receiver also watches it to abort if another pulse arrives.
 static PPS_PENDING: avr_device::interrupt::Mutex<Cell<bool>> =
@@ -83,7 +85,9 @@ fn main() -> ! {
 
         // Capture before doing display I/O: the first UART start bit may begin
         // immediately with PPS.  The ISR only records a possible next pulse.
-        primed_time = gps_uart.capture_rmc_time();
+        primed_time = gps_uart
+            .capture_rmc_time()
+            .map(|(hours, minutes, seconds)| time_zone::from_utc(hours, minutes, seconds));
 
         // If capture ended because a new PPS arrived, return to the top of the
         // loop immediately.  A MAX7221 transaction here could otherwise make
