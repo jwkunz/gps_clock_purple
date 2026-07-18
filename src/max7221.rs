@@ -1,4 +1,3 @@
-use arduino_hal::delay_ms;
 use embedded_hal::digital::OutputPin;
 
 fn decode_char(c:char) -> u8 {
@@ -53,9 +52,6 @@ const MX_DATA_NO_DECODE: u8 = 0x00;
 
 const MX_DATA_DISPTEST_NORMAL: u8 = 0x00;
 const MX_DATA_DISPTEST_MODE: u8 = 0x01;
-
-const MX_MASK_DP: u16 = 0x80;
-
 
 pub struct Max7221<DATA, CLK, CS>
 where
@@ -237,10 +233,4 @@ where
         }
     }
 
-
-
-    pub fn blank(&mut self) {
-        self.write_str("        ");
-    }
 }
-

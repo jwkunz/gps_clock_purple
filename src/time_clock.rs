@@ -1,69 +1,26 @@
-use heapless::String;
 use core::fmt::Write;
+use heapless::String;
+
+/// A whole-second UTC clock.  PPS is the sole source of elapsed time.
 pub struct TimeClock {
-    milliseconds: u16,
     seconds: u8,
     minutes: u8,
     hours: u8,
 }
 
 impl TimeClock {
-    pub fn new(
-        hours: u8,
-        minutes: u8,
-        seconds: u8,
-    ) -> Self {
+    pub fn new(hours: u8, minutes: u8, seconds: u8) -> Self {
         Self {
-            milliseconds: 0,
-            seconds,
-            minutes,
             hours,
+            minutes,
+            seconds,
         }
     }
 
-    pub fn set_time(
-        &mut self,
-        hours: u8,
-        minutes: u8,
-        seconds: u8,
-        milliseconds: u16
-    ) {
+    pub fn set_time(&mut self, hours: u8, minutes: u8, seconds: u8) {
         self.hours = hours;
         self.minutes = minutes;
         self.seconds = seconds;
-        self.milliseconds = milliseconds;
-    }
-
-    pub fn tick_fwd(
-        &mut self,
-        milliseconds: u16,
-        seconds: u8,
-        minutes: u8,
-        hours: u8,
-    ) {
-        self.milliseconds += milliseconds;
-
-        if self.milliseconds >= 1000 {
-            self.milliseconds %= 1000;
-
-            self.seconds += seconds;
-
-            if self.seconds >= 60 {
-                self.seconds %= 60;
-
-                self.minutes += minutes;
-
-                if self.minutes >= 60 {
-                    self.minutes %= 60;
-
-                    self.hours += hours;
-
-                    if self.hours >= 24 {
-                        self.hours %= 24;
-                    }
-                }
-            }
-        }
     }
 
     pub fn tick_second(&mut self) {
@@ -71,12 +28,10 @@ impl TimeClock {
 
         if self.seconds == 60 {
             self.seconds = 0;
-
             self.minutes += 1;
 
             if self.minutes == 60 {
                 self.minutes = 0;
-
                 self.hours += 1;
 
                 if self.hours == 24 {
@@ -86,36 +41,22 @@ impl TimeClock {
         }
     }
 
-    pub fn increment_millis_no_tick(&mut self, millis: u16){
-        self.milliseconds += millis;
-    }
-
-    pub fn tick_pps(&mut self) {
-        self.milliseconds = 0;
-        self.tick_second();
-    }
-
-    pub fn format<'a>(
-        &self,
-        s: &'a mut String<16>,
-    ) -> &'a str {
-
+    pub fn format<'a>(&self, s: &'a mut String<16>) -> &'a str {
         s.clear();
 
+        // Decimal points light the MAX7221's decimal-point segments, leaving
+        // six whole digits for HH:MM:SS and two unused display positions.
         let _ = write!(
             s,
-            "{}{}.{}{}.{}{}.{}{}",
+            "{}{}.{}{}.{}{}",
             self.hours / 10,
             self.hours % 10,
             self.minutes / 10,
             self.minutes % 10,
             self.seconds / 10,
             self.seconds % 10,
-            self.milliseconds / 100,
-            (self.milliseconds % 100) / 10
         );
 
         s.as_str()
     }
-
 }
