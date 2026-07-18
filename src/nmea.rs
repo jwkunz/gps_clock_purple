@@ -9,6 +9,44 @@ pub struct UtcDateTime {
     pub seconds: u8,
 }
 
+impl UtcDateTime {
+    /// Return the next UTC second, carrying into the date when necessary.
+    pub fn next_second(mut self) -> Self {
+        self.seconds += 1;
+        if self.seconds < 60 {
+            return self;
+        }
+
+        self.seconds = 0;
+        self.minutes += 1;
+        if self.minutes < 60 {
+            return self;
+        }
+
+        self.minutes = 0;
+        self.hours += 1;
+        if self.hours < 24 {
+            return self;
+        }
+
+        self.hours = 0;
+        self.day += 1;
+        if self.day <= days_in_month(self.month, self.year) {
+            return self;
+        }
+
+        self.day = 1;
+        self.month += 1;
+        if self.month <= 12 {
+            return self;
+        }
+
+        self.month = 1;
+        self.year = (self.year + 1) % 100;
+        self
+    }
+}
+
 /// Extract UTC date and time from a checksum-valid, active RMC sentence.
 ///
 /// Both GPS (`GPRMC`) and multi-constellation (`GNRMC`) talkers are accepted.
@@ -84,14 +122,17 @@ fn parse_date_time(time: &[u8], date: &[u8]) -> Option<UtcDateTime> {
 }
 
 fn is_valid_date(day: u8, month: u8, year: u8) -> bool {
-    let days = match month {
+    day > 0 && day <= days_in_month(month, year)
+}
+
+fn days_in_month(month: u8, year: u8) -> u8 {
+    match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
         2 if year % 4 == 0 => 29,
         2 => 28,
-        _ => return false,
-    };
-    day > 0 && day <= days
+        _ => 0,
+    }
 }
 
 fn two_digits(tens: u8, ones: u8) -> Option<u8> {
@@ -139,5 +180,29 @@ mod tests {
     #[test]
     fn rejects_invalid_checksum_and_void_fix() {
         assert_eq!(parse_rmc_time(b"$GPRMC,123519,A,4807.038,N*00"), None);
+    }
+
+    #[test]
+    fn advances_across_midnight_and_year_end() {
+        let utc = UtcDateTime {
+            year: 26,
+            month: 12,
+            day: 31,
+            hours: 23,
+            minutes: 59,
+            seconds: 59,
+        };
+
+        assert_eq!(
+            utc.next_second(),
+            UtcDateTime {
+                year: 27,
+                month: 1,
+                day: 1,
+                hours: 0,
+                minutes: 0,
+                seconds: 0,
+            }
+        );
     }
 }

@@ -106,9 +106,9 @@ fn main() -> ! {
             synchronized = true;
             last_tenths = u8::MAX;
 
-            // An RMC sentence received after this edge is intentionally
-            // applied at the *next* edge.  This accepts the GPS module's
-            // known one-second NMEA lag while keeping seconds PPS-aligned.
+            // NMEA follows this PPS by about one second.  Advance the parsed
+            // UTC timestamp before staging it for the next PPS, so that edge
+            // receives the time it actually represents.
             if let Some((hours, minutes, seconds)) = primed_time.take() {
                 clock.set_time(hours, minutes, seconds);
             } else {
@@ -119,7 +119,7 @@ fn main() -> ! {
             // begin immediately with PPS.  The ISR only records a next pulse.
             primed_time = gps_uart
                 .capture_rmc_time()
-                .map(time_zone::from_utc);
+                .map(|utc| time_zone::from_utc(utc.next_second()));
         }
 
         if !synchronized || pps_pending() {
