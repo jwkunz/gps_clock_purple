@@ -41,20 +41,31 @@ impl TimeClock {
         }
     }
 
-    pub fn format<'a>(&self, s: &'a mut String<16>) -> &'a str {
+    pub fn is_minute_boundary(&self) -> bool {
+        self.seconds == 0
+    }
+
+    /// Current whole second within the minute, for scheduling the next PPS.
+    pub fn seconds(&self) -> u8 {
+        self.seconds
+    }
+
+    pub fn format<'a>(&self, s: &'a mut String<16>, centiseconds: u8) -> &'a str {
         s.clear();
 
         // Decimal points light the MAX7221's decimal-point segments, leaving
-        // six digits for HH.MM.SS.  The final two display positions are blank.
+        // eight digits for HH.MM.SS.CC.
         let _ = write!(
             s,
-            "{}{}.{}{}.{}{}",
+            "{}{}.{}{}.{}{}.{}{}",
             self.hours / 10,
             self.hours % 10,
             self.minutes / 10,
             self.minutes % 10,
             self.seconds / 10,
             self.seconds % 10,
+            centiseconds / 10,
+            centiseconds % 10,
         );
 
         s.as_str()
