@@ -65,6 +65,14 @@ impl TimeClock {
         self.seconds
     }
 
+    pub fn hours(&self) -> u8 {
+        self.hours
+    }
+
+    pub fn minutes(&self) -> u8 {
+        self.minutes
+    }
+
     pub fn format<'a>(&self, s: &'a mut String<16>, centiseconds: u8) -> &'a str {
         s.clear();
 
