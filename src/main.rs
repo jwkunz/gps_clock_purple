@@ -3,6 +3,7 @@
 #![feature(abi_avr_interrupt)]
 
 use core::cell::Cell;
+use core::fmt::Write;
 use heapless::String;
 use panic_halt as _;
 
@@ -259,11 +260,17 @@ fn main() -> ! {
                 clock.set_time(local.hours, local.minutes, local.seconds);
                 clock.set_date(local.year, local.month, local.day);
 
-                for &b in clock.format_date(&mut text).as_bytes() {
-                    serial.write_byte(b);
-                }
-                serial.write_byte(b' ');
-                for &b in clock.format(&mut text, 0).as_bytes() {
+                // Prints the full parsed date (including year) for
+                // diagnostics, independent of what the physical display
+                // shows - kept for tracking the unresolved year-corruption
+                // issue over time.
+                text.clear();
+                let _ = write!(
+                    text,
+                    "{:02}.{:02}.{:02} {:02}.{:02}.{:02}",
+                    local.month, local.day, local.year, local.hours, local.minutes, local.seconds,
+                );
+                for &b in text.as_bytes() {
                     serial.write_byte(b);
                 }
                 serial.write_byte(b'\r');
