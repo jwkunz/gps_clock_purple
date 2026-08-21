@@ -94,19 +94,22 @@ impl TimeClock {
         s.as_str()
     }
 
-    /// Format the most recently applied local date as MM.DD.YY.
+    /// Format the most recently applied local date as MM.DD.YYYY. The
+    /// display has no colon glyph, so decimal points stand in as the field
+    /// separator, matching the running clock's own format.
     pub fn format_date<'a>(&self, s: &'a mut String<16>) -> &'a str {
         s.clear();
 
+        let full_year: u16 = 2000 + self.year as u16;
+
         let _ = write!(
             s,
-            "{}{}.{}{}.{}{}",
+            "{}{}.{}{}.{}",
             self.month / 10,
             self.month % 10,
             self.day / 10,
             self.day % 10,
-            self.year / 10,
-            self.year % 10,
+            full_year,
         );
 
         s.as_str()
