@@ -27,6 +27,12 @@ use button::Button;
 mod switch;
 use switch::Switch;
 
+mod buzzer;
+use buzzer::Buzzer;
+
+mod song;
+use song::Song;
+
 // Set only by the PPS ISR.  The main loop consumes it before starting an NMEA
 // capture; the receiver also watches it to abort if another pulse arrives.
 static PPS_PENDING: avr_device::interrupt::Mutex<Cell<bool>> =
@@ -104,6 +110,11 @@ fn main() -> ! {
     let mut adc = arduino_hal::Adc::new(dp.ADC, Default::default());
     let mut switch0 = Switch::new();
 
+    // D6 = OC0A. Ownership of the pin is only needed to claim the DDR bit;
+    // Timer0's hardware compare match drives the pin from here on.
+    let _buzzer_pin = pins.d6.into_output();
+    let mut song = Song::new(Buzzer::new(dp.TC0));
+
     let mut text: String<16> = String::new();
     let mut clock = TimeClock::new(0, 0, 0);
     let mut primed_time: Option<(u8, u8, u8)> = None;
@@ -140,6 +151,7 @@ fn main() -> ! {
         btn4.update(now_ms);
         btn5.update(now_ms);
         switch0.update(&mut adc, now_ms);
+        song.update(now_ms);
 
         if take_pps() {
             synchronized = true;
