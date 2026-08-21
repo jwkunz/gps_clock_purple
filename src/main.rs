@@ -133,6 +133,9 @@ fn main() -> ! {
     let mut adc = arduino_hal::Adc::new(dp.ADC, Default::default());
     let mut switch0 = Switch::new();
 
+    // Logs each successful GPS sync (date + time) for field diagnostics.
+    let mut serial = arduino_hal::default_serial!(dp, pins, 57600);
+
     // D6 = OC0A. Ownership of the pin is only needed to claim the DDR bit;
     // Timer0's hardware compare match drives the pin from here on.
     let _buzzer_pin = pins.d6.into_output();
@@ -255,6 +258,16 @@ fn main() -> ! {
             if let Some(local) = applied_primed_time {
                 clock.set_time(local.hours, local.minutes, local.seconds);
                 clock.set_date(local.year, local.month, local.day);
+
+                for &b in clock.format_date(&mut text).as_bytes() {
+                    serial.write_byte(b);
+                }
+                serial.write_byte(b' ');
+                for &b in clock.format(&mut text, 0).as_bytes() {
+                    serial.write_byte(b);
+                }
+                serial.write_byte(b'\r');
+                serial.write_byte(b'\n');
             } else {
                 clock.tick_second();
             }
