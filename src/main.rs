@@ -18,6 +18,15 @@ use time_clock::TimeClock;
 
 mod time_zone;
 
+mod debounce;
+mod time_base;
+
+mod button;
+use button::Button;
+
+mod switch;
+use switch::Switch;
+
 // Set only by the PPS ISR.  The main loop consumes it before starting an NMEA
 // capture; the receiver also watches it to abort if another pulse arrives.
 static PPS_PENDING: avr_device::interrupt::Mutex<Cell<bool>> =
@@ -80,6 +89,21 @@ fn main() -> ! {
     let gps_rx = pins.d8.into_floating_input();
     let mut gps_uart = SoftUart::new(gps_rx);
 
+    // Buttons are active-high with an external pull-down on the board, so a
+    // floating input reads the board's pull-down when idle and full VCC
+    // when pressed.
+    let mut btn0 = Button::new(pins.a0.into_floating_input());
+    let mut btn1 = Button::new(pins.a1.into_floating_input());
+    let mut btn2 = Button::new(pins.a2.into_floating_input());
+    let mut btn3 = Button::new(pins.a3.into_floating_input());
+    let mut btn4 = Button::new(pins.a4.into_floating_input());
+    let mut btn5 = Button::new(pins.a5.into_floating_input());
+
+    // A6 has no digital input buffer on the ATmega328P, so the switch is
+    // read through the ADC instead.
+    let mut adc = arduino_hal::Adc::new(dp.ADC, Default::default());
+    let mut switch0 = Switch::new();
+
     let mut text: String<16> = String::new();
     let mut clock = TimeClock::new(0, 0, 0);
     let mut primed_time: Option<(u8, u8, u8)> = None;
@@ -98,11 +122,25 @@ fn main() -> ! {
     // PCINT2 covers port D.  PCINT23 corresponds to PD7 / Arduino D7.
     dp.EXINT.pcicr().write(|w| unsafe { w.bits(0b100) });
     dp.EXINT.pcmsk2().write(|w| w.set(1 << 7));
+
+    // Timer2 provides a free-running millisecond tick for the button and
+    // switch debounce state machines, independent of PPS sync.
+    time_base::init(&dp.TC2);
+
     unsafe { avr_device::interrupt::enable() };
 
     display.write_str(clock.format(&mut text, 0));
 
     loop {
+        let now_ms = time_base::millis();
+        btn0.update(now_ms);
+        btn1.update(now_ms);
+        btn2.update(now_ms);
+        btn3.update(now_ms);
+        btn4.update(now_ms);
+        btn5.update(now_ms);
+        switch0.update(&mut adc, now_ms);
+
         if take_pps() {
             synchronized = true;
             last_centiseconds = u8::MAX;
