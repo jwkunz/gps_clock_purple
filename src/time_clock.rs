@@ -1,6 +1,8 @@
 use core::fmt::Write;
 use heapless::String;
 
+use crate::nmea::UtcDateTime;
+
 /// A whole-second UTC clock.  PPS is the sole source of elapsed time.  The
 /// date fields only change when a GPS capture applies a new one; there is no
 /// autonomous midnight rollover between captures, since a single missed
@@ -54,6 +56,37 @@ impl TimeClock {
                 }
             }
         }
+    }
+
+    /// Shift the displayed time by a signed number of hours, rolling the
+    /// date forward or backward a day at a time as needed. Used to apply a
+    /// UTC-offset change to the currently displayed time immediately,
+    /// rather than waiting for the next GPS capture to re-derive it.
+    pub fn shift_hours(&mut self, delta_hours: i8) {
+        let mut hours = self.hours as i16 + delta_hours as i16;
+
+        while hours < 0 || hours >= 24 {
+            let date = UtcDateTime {
+                year: self.year,
+                month: self.month,
+                day: self.day,
+                hours: 0,
+                minutes: 0,
+                seconds: 0,
+            };
+            let date = if hours < 0 {
+                hours += 24;
+                date.previous_day()
+            } else {
+                hours -= 24;
+                date.next_day()
+            };
+            self.year = date.year;
+            self.month = date.month;
+            self.day = date.day;
+        }
+
+        self.hours = hours as u8;
     }
 
     pub fn is_minute_boundary(&self) -> bool {

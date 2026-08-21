@@ -18,6 +18,7 @@ mod time_clock;
 use time_clock::TimeClock;
 
 mod time_zone;
+use time_zone::UtcOffset;
 
 mod debounce;
 mod time_base;
@@ -154,6 +155,11 @@ fn main() -> ! {
     let mut serial_guard_active = false;
     let mut showing_date = false;
     let mut last_alarm_render: Option<(u8, u8, u8, bool)> = None;
+    let mut active_offset = UtcOffset::zero();
+    let mut entry_offset = UtcOffset::zero();
+    let mut utc_offset_editing = false;
+    let mut last_combo_held = false;
+    let mut last_offset_render: Option<UtcOffset> = None;
 
     // Timer1 runs freely at 16 MHz / 256 = 62,500 Hz.  One second is 62,500
     // counts, so it never overflows while valid PPS pulses are present.
@@ -187,14 +193,54 @@ fn main() -> ! {
 
         // Edge-detected once per iteration regardless of mode, so a press
         // that starts in one mode and releases in another is never missed.
-        // Scroll/inc/dec auto-repeat on hold; BTN5's mode toggle does not.
+        // Scroll/inc/dec auto-repeat on hold; BTN4/BTN5's mode toggles do
+        // not.
         let btn0_edge = btn0.take_repeat_edge(now_ms);
         let btn1_edge = btn1.take_repeat_edge(now_ms);
         let btn2_edge = btn2.take_repeat_edge(now_ms);
         let btn3_edge = btn3.take_repeat_edge(now_ms);
+        let btn4_edge = btn4.take_pressed_edge();
         let btn5_edge = btn5.take_pressed_edge();
 
-        if btn5_edge {
+        // BTN4+BTN5 held together enters UTC-offset selection; once in it,
+        // pressing BTN4, BTN5, or both again all lock in the current
+        // selection and exit. combo_rising_edge is checked first so the
+        // single presses that make up the entry combo can't also be read
+        // as an immediate exit in that same iteration.
+        let combo_held = btn4.is_pressed() && btn5.is_pressed();
+        let combo_rising_edge = combo_held && !last_combo_held;
+        last_combo_held = combo_held;
+
+        let mut utc_offset_mode_just_changed = false;
+        if combo_rising_edge {
+            utc_offset_editing = !utc_offset_editing;
+            utc_offset_mode_just_changed = true;
+            if utc_offset_editing {
+                entry_offset = active_offset;
+            }
+        } else if utc_offset_editing && (btn4_edge || btn5_edge) {
+            utc_offset_editing = false;
+            utc_offset_mode_just_changed = true;
+        }
+        if utc_offset_mode_just_changed && !utc_offset_editing {
+            last_centiseconds = u8::MAX;
+            // Re-derives the displayed time under the new offset right
+            // away, rather than leaving it wrong until the next capture.
+            clock.shift_hours(active_offset.hours_delta_from(entry_offset));
+        }
+
+        if utc_offset_editing {
+            if btn2_edge {
+                active_offset = active_offset.next();
+            }
+            if btn1_edge {
+                active_offset = active_offset.previous();
+            }
+        }
+
+        // BTN5 presses that entered or exited UTC-offset mode (alone or as
+        // part of the BTN4+BTN5 combo) don't also toggle the alarm.
+        if btn5_edge && !btn4.is_pressed() && !utc_offset_mode_just_changed {
             if alarm.is_editing() {
                 alarm.stop_editing();
                 last_centiseconds = u8::MAX;
@@ -291,13 +337,24 @@ fn main() -> ! {
                 // bit may begin at the same instant as PPS.
                 primed_time = gps_uart
                     .capture_rmc_time()
-                    .map(|utc| time_zone::from_utc(utc.next_second()));
+                    .map(|utc| time_zone::from_utc(utc.next_second(), active_offset));
             }
 
             // The next PPS starts a minute-boundary capture.  Reserve its
             // final 20 ms for the synchronized UART start bit.
             serial_guard_active = clock.seconds() == 59;
         }
+
+        // UTC-offset mode takes over the display until the BTN4+BTN5 combo
+        // is pressed again, taking priority over every other display mode.
+        if utc_offset_editing {
+            if last_offset_render != Some(active_offset) {
+                display.write_str(active_offset.format(&mut text));
+                last_offset_render = Some(active_offset);
+            }
+            continue;
+        }
+        last_offset_render = None;
 
         // Alarm-set mode takes over the display until BTN5 confirms it.
         if alarm.is_editing() {

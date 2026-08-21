@@ -28,7 +28,10 @@ fn decode_char(c:char) -> u8 {
         'I' => 0x06,
         'J' => 0x3C,
         'L' => 0x0E,
+        'N' => 0x15,
         'P' => 0x67,
+        'T' => 0x30 | 0x01, // The '1' glyph combined with a hyphen.
+        'U' => 0x3E,
 
         '!' => 0xA0,
 

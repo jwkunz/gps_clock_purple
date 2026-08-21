@@ -30,6 +30,13 @@ impl UtcDateTime {
         }
 
         self.hours = 0;
+        self.next_day()
+    }
+
+    /// Return the next UTC day, carrying into month/year as necessary. Used
+    /// to find the local calendar date when a positive time-zone offset
+    /// pushes local time forward across midnight.
+    pub fn next_day(mut self) -> Self {
         self.day += 1;
         if self.day <= days_in_month(self.month, self.year) {
             return self;
