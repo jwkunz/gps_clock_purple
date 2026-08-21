@@ -47,12 +47,38 @@ impl UsTimeZone {
     }
 }
 
-/// Convert GPS UTC to the selected U.S. local time.  The display has no date,
-/// so only the local clock fields are returned; hour wrapping is intentional.
-pub fn from_utc(utc: UtcDateTime) -> (u8, u8, u8) {
+/// Local wall-clock date and time after applying the configured U.S. time
+/// zone and current DST rule.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LocalDateTime {
+    pub year: u8,
+    pub month: u8,
+    pub day: u8,
+    pub hours: u8,
+    pub minutes: u8,
+    pub seconds: u8,
+}
+
+/// Convert GPS UTC to the selected U.S. local time. U.S. zones are always
+/// behind UTC, so the local date only ever borrows a day backward, never
+/// forward.
+pub fn from_utc(utc: UtcDateTime) -> LocalDateTime {
     let offset = TIME_ZONE.standard_offset_hours() + if is_us_dst(utc, TIME_ZONE) { 1 } else { 0 };
-    let local_hours = (utc.hours as i8 + offset).rem_euclid(24) as u8;
-    (local_hours, utc.minutes, utc.seconds)
+    let shifted_hours = utc.hours as i8 + offset;
+    let local_date = if shifted_hours < 0 {
+        utc.previous_day()
+    } else {
+        utc
+    };
+
+    LocalDateTime {
+        year: local_date.year,
+        month: local_date.month,
+        day: local_date.day,
+        hours: shifted_hours.rem_euclid(24) as u8,
+        minutes: utc.minutes,
+        seconds: utc.seconds,
+    }
 }
 
 fn is_us_dst(utc: UtcDateTime, zone: UsTimeZone) -> bool {
@@ -93,16 +119,47 @@ fn weekday(mut year: u16, month: u8, day: u8) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use super::{from_utc, TIME_ZONE};
+    use super::{from_utc, LocalDateTime, TIME_ZONE};
     use crate::nmea::UtcDateTime;
 
     #[test]
     fn eastern_dst_changes_at_the_correct_utc_hours() {
         assert!(matches!(TIME_ZONE, super::UsTimeZone::Eastern));
-        assert_eq!(from_utc(utc(26, 3, 8, 6)), (1, 0, 0));
-        assert_eq!(from_utc(utc(26, 3, 8, 7)), (3, 0, 0));
-        assert_eq!(from_utc(utc(26, 11, 1, 5)), (1, 0, 0));
-        assert_eq!(from_utc(utc(26, 11, 1, 6)), (1, 0, 0));
+        assert_eq!(from_utc(utc(26, 3, 8, 6)).hours, 1);
+        assert_eq!(from_utc(utc(26, 3, 8, 7)).hours, 3);
+        assert_eq!(from_utc(utc(26, 11, 1, 5)).hours, 1);
+        assert_eq!(from_utc(utc(26, 11, 1, 6)).hours, 1);
+    }
+
+    #[test]
+    fn local_date_borrows_a_day_when_the_offset_crosses_utc_midnight() {
+        // 02:00 UTC in standard time (UTC-5) is 21:00 the previous local day.
+        assert_eq!(
+            from_utc(utc(26, 1, 15, 2)),
+            LocalDateTime {
+                year: 26,
+                month: 1,
+                day: 14,
+                hours: 21,
+                minutes: 0,
+                seconds: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn local_date_matches_utc_date_when_the_offset_does_not_cross_midnight() {
+        assert_eq!(
+            from_utc(utc(26, 1, 15, 12)),
+            LocalDateTime {
+                year: 26,
+                month: 1,
+                day: 15,
+                hours: 7,
+                minutes: 0,
+                seconds: 0,
+            }
+        );
     }
 
     fn utc(year: u8, month: u8, day: u8, hours: u8) -> UtcDateTime {

@@ -45,6 +45,25 @@ impl UtcDateTime {
         self.year = (self.year + 1) % 100;
         self
     }
+
+    /// Return the previous UTC day, borrowing across month/year as
+    /// necessary. Used to find the local calendar date when a negative
+    /// time-zone offset pushes local time back across midnight.
+    pub fn previous_day(mut self) -> Self {
+        if self.day > 1 {
+            self.day -= 1;
+            return self;
+        }
+
+        if self.month > 1 {
+            self.month -= 1;
+        } else {
+            self.month = 12;
+            self.year = if self.year == 0 { 99 } else { self.year - 1 };
+        }
+        self.day = days_in_month(self.month, self.year);
+        self
+    }
 }
 
 /// Extract UTC date and time from a checksum-valid, active RMC sentence.
@@ -199,6 +218,30 @@ mod tests {
                 year: 27,
                 month: 1,
                 day: 1,
+                hours: 0,
+                minutes: 0,
+                seconds: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn previous_day_borrows_across_month_and_year_start() {
+        let utc = UtcDateTime {
+            year: 27,
+            month: 1,
+            day: 1,
+            hours: 0,
+            minutes: 0,
+            seconds: 0,
+        };
+
+        assert_eq!(
+            utc.previous_day(),
+            UtcDateTime {
+                year: 26,
+                month: 12,
+                day: 31,
                 hours: 0,
                 minutes: 0,
                 seconds: 0,

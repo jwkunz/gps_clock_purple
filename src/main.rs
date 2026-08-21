@@ -117,11 +117,12 @@ fn main() -> ! {
 
     let mut text: String<16> = String::new();
     let mut clock = TimeClock::new(0, 0, 0);
-    let mut primed_time: Option<(u8, u8, u8)> = None;
+    let mut primed_time: Option<time_zone::LocalDateTime> = None;
     let mut last_centiseconds = u8::MAX;
     let mut synchronized = false;
     let mut initial_sync_pending = true;
     let mut serial_guard_active = false;
+    let mut showing_date = false;
 
     // Timer1 runs freely at 16 MHz / 256 = 62,500 Hz.  One second is 62,500
     // counts, so it never overflows while valid PPS pulses are present.
@@ -160,8 +161,9 @@ fn main() -> ! {
             // The NMEA timestamp follows this PPS.  Advance it before staging
             // for the next PPS, so that edge receives the time it represents.
             let applied_primed_time = primed_time.take();
-            if let Some((hours, minutes, seconds)) = applied_primed_time {
-                clock.set_time(hours, minutes, seconds);
+            if let Some(local) = applied_primed_time {
+                clock.set_time(local.hours, local.minutes, local.seconds);
+                clock.set_date(local.year, local.month, local.day);
             } else {
                 clock.tick_second();
             }
@@ -184,6 +186,20 @@ fn main() -> ! {
             // The next PPS starts a minute-boundary capture.  Reserve its
             // final 20 ms for the synchronized UART start bit.
             serial_guard_active = clock.seconds() == 59;
+        }
+
+        // BTN4 held shows the date in place of the running clock. The clock
+        // itself (above) keeps advancing underneath so nothing is lost.
+        if btn4.is_pressed() {
+            if !showing_date {
+                display.write_str(clock.format_date(&mut text));
+                showing_date = true;
+            }
+            continue;
+        } else if showing_date {
+            showing_date = false;
+            // Force the next tick to redraw the clock immediately.
+            last_centiseconds = u8::MAX;
         }
 
         if !synchronized || pps_pending() {

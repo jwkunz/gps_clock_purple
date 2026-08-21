@@ -1,11 +1,17 @@
 use core::fmt::Write;
 use heapless::String;
 
-/// A whole-second UTC clock.  PPS is the sole source of elapsed time.
+/// A whole-second UTC clock.  PPS is the sole source of elapsed time.  The
+/// date fields only change when a GPS capture applies a new one; there is no
+/// autonomous midnight rollover between captures, since a single missed
+/// capture is rare and the date is only ever a display convenience here.
 pub struct TimeClock {
     seconds: u8,
     minutes: u8,
     hours: u8,
+    year: u8,
+    month: u8,
+    day: u8,
 }
 
 impl TimeClock {
@@ -14,6 +20,9 @@ impl TimeClock {
             hours,
             minutes,
             seconds,
+            year: 0,
+            month: 0,
+            day: 0,
         }
     }
 
@@ -21,6 +30,12 @@ impl TimeClock {
         self.hours = hours;
         self.minutes = minutes;
         self.seconds = seconds;
+    }
+
+    pub fn set_date(&mut self, year: u8, month: u8, day: u8) {
+        self.year = year;
+        self.month = month;
+        self.day = day;
     }
 
     pub fn tick_second(&mut self) {
@@ -66,6 +81,24 @@ impl TimeClock {
             self.seconds % 10,
             centiseconds / 10,
             centiseconds % 10,
+        );
+
+        s.as_str()
+    }
+
+    /// Format the most recently applied local date as MM.DD.YY.
+    pub fn format_date<'a>(&self, s: &'a mut String<16>) -> &'a str {
+        s.clear();
+
+        let _ = write!(
+            s,
+            "{}{}.{}{}.{}{}",
+            self.month / 10,
+            self.month % 10,
+            self.day / 10,
+            self.day % 10,
+            self.year / 10,
+            self.year % 10,
         );
 
         s.as_str()
